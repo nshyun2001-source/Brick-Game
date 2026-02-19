@@ -87,7 +87,8 @@ body {
     overflow: hidden;
     touch-action: none;
     background: linear-gradient(180deg, var(--bg-shell-top) 0%, var(--bg-shell-bot) 100%);
-    border-radius: 38px;
+    border-radius: 38px 38px 0 0;
+    /* 상단 라운드, 하단 직선 */
     box-shadow:
         0 0 0 1px rgba(255, 255, 255, 0.1),
         0 0 40px rgba(100, 60, 255, 0.25),
