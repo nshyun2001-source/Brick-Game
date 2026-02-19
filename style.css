@@ -576,3 +576,23 @@ video {
     font-size: 0.75rem;
     letter-spacing: 2px;
 }
+
+/* ══════════════════════════════════════════════
+   촬영 미리보기 팝업 애니메이션
+══════════════════════════════════════════════ */
+@keyframes previewPop {
+    0% {
+        transform: scale(0.5);
+        opacity: 0;
+    }
+
+    70% {
+        transform: scale(1.08);
+        opacity: 1;
+    }
+
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}

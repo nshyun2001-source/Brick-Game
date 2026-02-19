@@ -27,7 +27,7 @@ const PADDLE_HEIGHT = 12;
 const PADDLE_WIDTH = 70;   // 패들 사이즈 축소
 const BALL_RADIUS = 6;
 const BALL_SPEED = 6;       // 공의 일정한 속도 (px/프레임)
-const BRICK_ROWS = 18;
+const BRICK_ROWS = 16;
 const BRICK_COLS = 10;
 const BRICK_PADDING = 2;
 const BRICK_OFFSET_TOP = 70;
@@ -109,6 +109,39 @@ function playSound(type) {
             osc.start(t);
             osc.stop(t + 0.35);
         });
+
+    } else if (type === 'camera-click') {
+        // 📸 카메라 셔터음: 기계적 클릭 + 찰칵 잔향
+        // 1) 날카로운 노이즈 클릭
+        const bufSize = Math.floor(audioCtx.sampleRate * 0.06);
+        const buf = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < bufSize; i++) {
+            data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufSize, 2.5);
+        }
+        const src = audioCtx.createBufferSource();
+        src.buffer = buf;
+        const clickGain = audioCtx.createGain();
+        clickGain.gain.setValueAtTime(1.2, audioCtx.currentTime);
+        clickGain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.06);
+        const lpf = audioCtx.createBiquadFilter();
+        lpf.type = 'bandpass';
+        lpf.frequency.value = 2500;
+        lpf.Q.value = 1.2;
+        src.connect(lpf); lpf.connect(clickGain); clickGain.connect(audioCtx.destination);
+        src.start();
+
+        // 2) 미러 반동음 (찰칵~)
+        const osc2 = audioCtx.createOscillator();
+        const g2 = audioCtx.createGain();
+        osc2.type = 'square';
+        osc2.frequency.setValueAtTime(900, audioCtx.currentTime + 0.03);
+        osc2.frequency.exponentialRampToValueAtTime(300, audioCtx.currentTime + 0.12);
+        g2.gain.setValueAtTime(0.18, audioCtx.currentTime + 0.03);
+        g2.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.13);
+        osc2.connect(g2); g2.connect(audioCtx.destination);
+        osc2.start(audioCtx.currentTime + 0.03);
+        osc2.stop(audioCtx.currentTime + 0.14);
     }
 }
 
@@ -129,6 +162,10 @@ let bricks = [];
 let particles = [];
 let flashEffects = []; // 순간 번쩍임 효과
 let sourceImage = null;
+
+// ─── Delta Time (FPS 독립적 속도 보정) ──────────────────────────────────────
+let lastFrameTime = 0;
+const TARGET_FRAME_MS = 1000 / 60; // 60fps 기준 1프레임 = 16.667ms
 
 // ─── 파티클 시스템 (단순화: 작은 색상 점) ───────────────────────────────────
 class Particle {
@@ -296,7 +333,22 @@ captureBtn.addEventListener('click', () => {
     tempCanvas.width = video.videoWidth;
     tempCanvas.height = video.videoHeight;
 
-    // Draw mirrored video frame to canvas
+    // 🔵 화면 번쩍임 효과 (셔터 플래시)
+    const flash = document.createElement('div');
+    flash.style.cssText = `
+        position: fixed; inset: 0; z-index: 9999;
+        background: white; opacity: 0.85;
+        pointer-events: none;
+        transition: opacity 0.4s ease;
+    `;
+    document.body.appendChild(flash);
+    setTimeout(() => { flash.style.opacity = '0'; }, 60);
+    setTimeout(() => { flash.remove(); }, 460);
+
+    // 📸 셔터음 재생
+    playSound('camera-click');
+
+    // 미러 반전으로 영상 캡처
     context.translate(tempCanvas.width, 0);
     context.scale(-1, 1);
     context.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
@@ -307,6 +359,26 @@ captureBtn.addEventListener('click', () => {
         sourceImage = img;
         startBtn.classList.remove('disabled');
         startBtn.disabled = false;
+
+        // 🖼️ 찍힌 사진 미리보기 표시
+        let preview = document.getElementById('capture-preview');
+        if (!preview) {
+            preview = document.createElement('img');
+            preview.id = 'capture-preview';
+            preview.style.cssText = `
+                width: 72px; height: 72px;
+                object-fit: cover;
+                border-radius: 12px;
+                border: 2px solid #ff5ca8;
+                box-shadow: 0 0 12px rgba(255,92,168,0.6);
+                display: block;
+                margin: 0 auto;
+                animation: previewPop 0.3s ease;
+            `;
+            uploadStatus.insertAdjacentElement('beforebegin', preview);
+        }
+        preview.src = imgData;
+
         uploadStatus.textContent = '📸 현행범 포착 완료! 이제 응징합시다!';
         uploadStatus.style.color = '#ff9f43';
         stopCamera();
@@ -408,9 +480,10 @@ function drawPaddle() {
     ctx.closePath();
 }
 
-function collisionDetection() {
-    const nextX = ballX + ballDX;
-    const nextY = ballY + ballDY;
+function collisionDetection(dt) {
+    // dt로 다음 위치 예측 (FPS에 관계없이 정확한 충돌)
+    const nextX = ballX + ballDX * dt;
+    const nextY = ballY + ballDY * dt;
 
     for (let c = 0; c < BRICK_COLS; c++) {
         for (let r = 0; r < BRICK_ROWS; r++) {
@@ -442,14 +515,12 @@ function collisionDetection() {
                 const minOverlapY = Math.min(overlapTop, overlapBottom);
 
                 if (minOverlapX < minOverlapY) {
-                    // 좌우 면 충돌 → X 반사
                     ballDX = -ballDX;
                 } else {
-                    // 상하 면 충돌 → Y 반사
                     ballDY = -ballDY;
                 }
 
-                // 속도 작은 변화: 조금 빨라지게 (100개까지)
+                // 속도 점진적 증가 (점수에 따라)
                 const currentSpeed = Math.hypot(ballDX, ballDY);
                 const targetSpeed = BALL_SPEED + (score / (BRICK_ROWS * BRICK_COLS * 10)) * 2;
                 const scale = targetSpeed / currentSpeed;
@@ -459,7 +530,7 @@ function collisionDetection() {
                 if (score === BRICK_ROWS * BRICK_COLS * 10) {
                     endGame(true);
                 }
-                return; // 한 프레임에 하나만 처리
+                return;
             }
         }
     }
@@ -535,8 +606,15 @@ function endGame(win) {
     playSound(win ? 'win' : 'lose');
 }
 
-function draw() {
+function draw(timestamp = 0) {
     if (!gameStarted) return;
+
+    // ── Delta Time 계산 (60fps 기준 정규화) ─────────────────────────────
+    const elapsed = lastFrameTime > 0 ? timestamp - lastFrameTime : TARGET_FRAME_MS;
+    // 최대 2.5배로 제한 (탭 전환 후 복귀 시 공이 튀지 않도록)
+    const dt = Math.min(elapsed / TARGET_FRAME_MS, 2.5);
+    lastFrameTime = timestamp;
+    // ──────────────────────────────────────────────────────────────────
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -562,50 +640,43 @@ function draw() {
 
     drawBall();
     drawPaddle();
-    collisionDetection();
+    collisionDetection(dt);
 
-    // Wall & Ceiling collisions
-    if (ballX + ballDX > canvas.width - BALL_RADIUS) {
+    // Wall & Ceiling collisions (dt 반영)
+    if (ballX + ballDX * dt > canvas.width - BALL_RADIUS) {
         ballX = canvas.width - BALL_RADIUS;
         ballDX = -Math.abs(ballDX);
         playSound('wall');
-    } else if (ballX + ballDX < BALL_RADIUS) {
+    } else if (ballX + ballDX * dt < BALL_RADIUS) {
         ballX = BALL_RADIUS;
         ballDX = Math.abs(ballDX);
         playSound('wall');
     }
 
-    if (ballY + ballDY < BALL_RADIUS) {
+    if (ballY + ballDY * dt < BALL_RADIUS) {
         ballY = BALL_RADIUS;
         ballDY = Math.abs(ballDY);
         playSound('wall');
-    } else if (ballY + ballDY > canvas.height - BALL_RADIUS - PADDLE_HEIGHT - 10) {
+    } else if (ballY + ballDY * dt > canvas.height - BALL_RADIUS - PADDLE_HEIGHT - 10) {
         const paddleTop = canvas.height - PADDLE_HEIGHT - 10;
         // Paddle collision
         if (ballX > paddleX && ballX < paddleX + PADDLE_WIDTH &&
-            ballY + ballDY >= paddleTop && ballY <= paddleTop) {
+            ballY + ballDY * dt >= paddleTop && ballY <= paddleTop) {
             playSound('wall');
 
-            // 패들에서 맞은 위치: -1 ~ +1  (0 = 중앙)
-            const hitPos = ((ballX - paddleX) / PADDLE_WIDTH) * 2 - 1; // -1 ~ +1
-
-            // 비선형 각도: 중앙은 작고 끝으로 갈수록 급격히 커짐 (2차 제곱 곡선)
-            // hitPos^1.8 로 비선형 보간
+            const hitPos = ((ballX - paddleX) / PADDLE_WIDTH) * 2 - 1;
             const normalizedPos = Math.sign(hitPos) * Math.pow(Math.abs(hitPos), 1.8);
-            const MAX_ANGLE = Math.PI / 3; // 최대 ±60°
+            const MAX_ANGLE = Math.PI / 3;
             const angle = normalizedPos * MAX_ANGLE;
 
-            // 현재 공 속도 유지
             const speed = Math.hypot(ballDX, ballDY);
             ballDX = speed * Math.sin(angle);
-            ballDY = -speed * Math.cos(angle); // 항상 위로
+            ballDY = -speed * Math.cos(angle);
 
-            // 수직 방향 보장 (너무 수평에 가지 않도록)
             if (Math.abs(ballDY) < 2) ballDY = -2;
 
-            ballY = paddleTop - BALL_RADIUS; // 못 뒤에 끼어 안으로
-        } else if (ballY + ballDY > canvas.height) {
-            // 공을 못 치면 숨볐
+            ballY = paddleTop - BALL_RADIUS;
+        } else if (ballY + ballDY * dt > canvas.height) {
             lives--;
             updateHUD();
             playSound('lose');
@@ -614,18 +685,18 @@ function draw() {
         }
     }
 
-    // Move paddle
+    // Move paddle (dt 반영)
     if (rightPressed && paddleX < canvas.width - PADDLE_WIDTH) {
-        paddleX += 7;
+        paddleX += 7 * dt;
     } else if (leftPressed && paddleX > 0) {
-        paddleX -= 7;
+        paddleX -= 7 * dt;
     }
 
-    // Move ball
-    ballX += ballDX;
-    ballY += ballDY;
+    // Move ball (dt 반영 — 핵심: 실제 경과 시간만큼만 이동)
+    ballX += ballDX * dt;
+    ballY += ballDY * dt;
 
-    // 클딼핑: 공이 사이드 바깥으로 빠지지 않도록
+    // 클리핑
     ballX = Math.max(BALL_RADIUS, Math.min(canvas.width - BALL_RADIUS, ballX));
     ballY = Math.max(BALL_RADIUS, ballY);
 
@@ -648,13 +719,13 @@ function continueGame() {
     gameStarted = true;
     ballX = canvas.width / 2;
     ballY = canvas.height - 80;
-    // 수직 위 기준 ±40도 이내로 랜덤 시작
     const launchAngle = (Math.random() - 0.5) * (Math.PI * 80 / 180);
     ballDX = BALL_SPEED * Math.sin(launchAngle);
-    ballDY = -BALL_SPEED * Math.cos(launchAngle); // 항상 위로
+    ballDY = -BALL_SPEED * Math.cos(launchAngle);
     paddleX = (canvas.width - PADDLE_WIDTH) / 2;
     particles = [];
     flashEffects = [];
+    lastFrameTime = 0; // dt 초기화
     requestAnimationFrame(draw);
 }
 
@@ -665,13 +736,13 @@ function initGame() {
     gameStarted = true;
     ballX = canvas.width / 2;
     ballY = canvas.height - 80;
-    // 수직 위 기준 ±40도 이내로 랜덤 시작
     const launchAngle = (Math.random() - 0.5) * (Math.PI * 80 / 180);
     ballDX = BALL_SPEED * Math.sin(launchAngle);
-    ballDY = -BALL_SPEED * Math.cos(launchAngle); // 항상 위로
+    ballDY = -BALL_SPEED * Math.cos(launchAngle);
     particles = [];
     flashEffects = [];
+    lastFrameTime = 0; // dt 초기화
     updateHUD();
     initBricks();
-    draw();
+    requestAnimationFrame(draw); // draw() 직접 호출 대신 rAF 사용
 }
