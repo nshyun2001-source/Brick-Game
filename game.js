@@ -280,6 +280,18 @@ function playSound(type) {
             echoSrc.connect(echoLpf); echoLpf.connect(echoGain); echoGain.connect(audioCtx.destination);
             echoSrc.start(t0 + delay);
         });
+    } else if (type === 'menu-tap') {
+        // 🔘 메뉴 버튼 탭음: 경쯤하고 짧은 클릭
+        const t0 = audioCtx.currentTime;
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.type = 'sine';
+        o.frequency.setValueAtTime(1200, t0);
+        o.frequency.exponentialRampToValueAtTime(800, t0 + 0.06);
+        g.gain.setValueAtTime(0.3, t0);
+        g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.08);
+        o.connect(g); g.connect(audioCtx.destination);
+        o.start(t0); o.stop(t0 + 0.1);
     }
 }
 
@@ -530,11 +542,12 @@ function stopCamera() {
 
 // 갤러리 버튼 → 파일 선택 다이얼로그 (JS로 직접 트리거)
 galleryBtn.addEventListener('click', () => {
+    playSound('menu-tap');
     imageUpload.value = '';   // 같은 파일 재선택 허용
     imageUpload.click();
 });
 
-cameraBtn.addEventListener('click', startCamera);
+cameraBtn.addEventListener('click', () => { playSound('menu-tap'); startCamera(); });
 cancelCameraBtn.addEventListener('click', stopCamera);
 
 
@@ -648,13 +661,9 @@ function drawBricks() {
                     const tick = Math.floor(Date.now() / 600) % 4;
                     const funnyEmoji = ['💣', '🧨', '💥', '😈'][tick];
 
-                    // 1) 노란 경고색 배경
+                    // 1) 다크 배경
                     ctx.globalAlpha = 0.92;
-                    const warnGrad = ctx.createLinearGradient(brickX, brickY, brickX + brickWidth, brickY + brickHeight);
-                    warnGrad.addColorStop(0, '#1a0500');
-                    warnGrad.addColorStop(0.5, `rgba(80, 10, 0, ${0.8 + pulse * 0.2})`);
-                    warnGrad.addColorStop(1, '#1a0500');
-                    ctx.fillStyle = warnGrad;
+                    ctx.fillStyle = '#1a0500';
                     ctx.fillRect(brickX, brickY, brickWidth, brickHeight);
 
                     // 2) 만화풍 펀탄 테두리 (노란+빨간 교차)
@@ -721,16 +730,15 @@ function triggerExplosion(startC, startR) {
 }
 
 function drawBall() {
+    ctx.save();
     ctx.beginPath();
     ctx.arc(ballX, ballY, BALL_RADIUS, 0, Math.PI * 2);
     ctx.fillStyle = '#00f2fe';
-    ctx.fill();
-
-    // Ball glow
-    ctx.shadowBlur = 15;
+    ctx.shadowBlur = 12;
     ctx.shadowColor = '#00f2fe';
+    ctx.fill();
     ctx.closePath();
-    ctx.shadowBlur = 0; // Reset for next drawings
+    ctx.restore(); // shadowBlur 완전 초기화
 }
 
 function drawPaddle() {
@@ -839,6 +847,7 @@ function endGame(win) {
         restartBtn.innerHTML = "🔄 다시 박살내기";
         restartBtn.style.display = "block";
         restartBtn.onclick = () => {
+            playSound('menu-tap');
             gameOverOverlay.classList.remove('active');
             continueGame();
         };
@@ -858,6 +867,7 @@ function endGame(win) {
         restartBtn.innerHTML = `🚀 ${stage + 1}단계 도전!`;
         restartBtn.style.display = "block";
         restartBtn.onclick = () => {
+            playSound('menu-tap');
             gameOverOverlay.classList.remove('active');
             nextStage();
         };
@@ -881,6 +891,7 @@ function endGame(win) {
         restartBtn.innerHTML = "🔄 처음부터 다시";
         restartBtn.style.display = "block";
         restartBtn.onclick = () => {
+            playSound('menu-tap');
             gameOverOverlay.classList.remove('active');
             initGame();
         };
@@ -888,6 +899,7 @@ function endGame(win) {
         reselectBtn.innerHTML = "😈 다른 사람 소환";
         reselectBtn.style.display = "block";
         reselectBtn.onclick = () => {
+            playSound('menu-tap');
             stopCamera();
             gameOverOverlay.classList.remove('active');
             uiOverlay.classList.add('active');
@@ -1016,6 +1028,7 @@ function draw(timestamp = 0) {
 // But we still need the initial logic for the first game start
 startBtn.addEventListener('click', () => {
     if (!startBtn.disabled && sourceImage) {
+        playSound('menu-tap');
         uiOverlay.classList.remove('active');
         initGame();
     }
