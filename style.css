@@ -107,11 +107,17 @@ body {
         max-height: 100svh;
     }
 
-    /* 모바일에서 safe area 성늤 나울때 헤더 상단 여백 보장 */
+    /* 모바일 상단 safe area (Dynamic Island / 노치) */
     .app-header {
         padding-top: calc(env(safe-area-inset-top) + 14px);
     }
+
+    /* 모바일 하단 safe area (홈바 / 홈 인디케이터 가림 방지) */
+    .game-wrapper {
+        padding-bottom: env(safe-area-inset-bottom);
+    }
 }
+
 
 /* ══════════════════════════════════════════════
    앱 헤더 — 고급 아케이드 스타일

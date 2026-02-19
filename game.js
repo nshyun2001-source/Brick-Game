@@ -272,6 +272,31 @@ canvas.addEventListener('touchstart', (e) => {
 
 
 
+// ─── 사진 미리보기 공통 함수 ──────────────────────────────────────────────
+function showPhotoPreview(src) {
+    let preview = document.getElementById('capture-preview');
+    if (!preview) {
+        preview = document.createElement('img');
+        preview.id = 'capture-preview';
+        preview.style.cssText = `
+            width: 72px; height: 72px;
+            object-fit: cover;
+            border-radius: 12px;
+            border: 2px solid #ff5ca8;
+            box-shadow: 0 0 12px rgba(255,92,168,0.6);
+            display: block;
+            margin: 0 auto 4px;
+            animation: previewPop 0.3s ease;
+        `;
+        uploadStatus.insertAdjacentElement('beforebegin', preview);
+    }
+    // 애니메이션 재실행을 위해 재설정
+    preview.style.animation = 'none';
+    preview.offsetHeight; // reflow
+    preview.style.animation = 'previewPop 0.3s ease';
+    preview.src = src;
+}
+
 imageUpload.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -282,6 +307,7 @@ imageUpload.addEventListener('change', (e) => {
             sourceImage = img;
             startBtn.classList.remove('disabled');
             startBtn.disabled = false;
+            showPhotoPreview(event.target.result); // 미리보기 표시
             uploadStatus.textContent = '😤 준비됐다! 이제 박살내러 가자!';
             uploadStatus.style.color = '#00f2fe';
         };
@@ -292,7 +318,6 @@ imageUpload.addEventListener('change', (e) => {
         img.src = event.target.result;
     };
     reader.readAsDataURL(file);
-    // 같은 파일 재선택 허용을 위해 값 초기화
     e.target.value = '';
 });
 
@@ -359,26 +384,7 @@ captureBtn.addEventListener('click', () => {
         sourceImage = img;
         startBtn.classList.remove('disabled');
         startBtn.disabled = false;
-
-        // 🖼️ 찍힌 사진 미리보기 표시
-        let preview = document.getElementById('capture-preview');
-        if (!preview) {
-            preview = document.createElement('img');
-            preview.id = 'capture-preview';
-            preview.style.cssText = `
-                width: 72px; height: 72px;
-                object-fit: cover;
-                border-radius: 12px;
-                border: 2px solid #ff5ca8;
-                box-shadow: 0 0 12px rgba(255,92,168,0.6);
-                display: block;
-                margin: 0 auto;
-                animation: previewPop 0.3s ease;
-            `;
-            uploadStatus.insertAdjacentElement('beforebegin', preview);
-        }
-        preview.src = imgData;
-
+        showPhotoPreview(imgData); // 미리보기 공통 함수 사용
         uploadStatus.textContent = '📸 현행범 포착 완료! 이제 응징합시다!';
         uploadStatus.style.color = '#ff9f43';
         stopCamera();
