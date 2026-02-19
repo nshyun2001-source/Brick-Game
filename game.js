@@ -162,34 +162,71 @@ function playSound(type) {
         });
 
     } else if (type === 'bomb-explosion') {
-        // 💥 폭탄 폭발음: 다이나믹 저음 + 충격파
-        // 1) 로우 바스 잡음
-        const eBuf = audioCtx.createBuffer(1, Math.floor(audioCtx.sampleRate * 0.5), audioCtx.sampleRate);
-        const eData = eBuf.getChannelData(0);
-        for (let i = 0; i < eData.length; i++) {
-            eData[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / eData.length, 1.2);
-        }
-        const eSrc = audioCtx.createBufferSource();
-        eSrc.buffer = eBuf;
-        const eLpf = audioCtx.createBiquadFilter();
-        eLpf.type = 'lowpass';
-        eLpf.frequency.value = 300;
-        const eGain = audioCtx.createGain();
-        eGain.gain.setValueAtTime(3.5, audioCtx.currentTime);
-        eGain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.5);
-        eSrc.connect(eLpf); eLpf.connect(eGain); eGain.connect(audioCtx.destination);
-        eSrc.start();
-        // 2) 충격파 공명
-        [180, 120, 80].forEach((freq, i) => {
+        // 💥 화려한 폭발음: 4레이어
+        const t0 = audioCtx.currentTime;
+
+        // 1레이어: 서브베이스 붐(BOOM) — 깊고 더러운 충격
+        const boomLen = Math.floor(audioCtx.sampleRate * 0.9);
+        const boomBuf = audioCtx.createBuffer(1, boomLen, audioCtx.sampleRate);
+        const boomData = boomBuf.getChannelData(0);
+        for (let i = 0; i < boomLen; i++)
+            boomData[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / boomLen, 0.7);
+        const boomSrc = audioCtx.createBufferSource();
+        boomSrc.buffer = boomBuf;
+        const boomLpf = audioCtx.createBiquadFilter();
+        boomLpf.type = 'lowpass'; boomLpf.frequency.value = 200;
+        const boomGain = audioCtx.createGain();
+        boomGain.gain.setValueAtTime(6.0, t0);
+        boomGain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.9);
+        boomSrc.connect(boomLpf); boomLpf.connect(boomGain); boomGain.connect(audioCtx.destination);
+        boomSrc.start(t0);
+
+        // 2레이어: 충격파 크랙 — 빠른 어택, 날카롭게
+        const crackLen = Math.floor(audioCtx.sampleRate * 0.12);
+        const crackBuf = audioCtx.createBuffer(1, crackLen, audioCtx.sampleRate);
+        const crackData = crackBuf.getChannelData(0);
+        for (let i = 0; i < crackLen; i++)
+            crackData[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / crackLen, 4);
+        const crackSrc = audioCtx.createBufferSource();
+        crackSrc.buffer = crackBuf;
+        const crackBpf = audioCtx.createBiquadFilter();
+        crackBpf.type = 'bandpass'; crackBpf.frequency.value = 2200; crackBpf.Q.value = 0.4;
+        const crackGain = audioCtx.createGain();
+        crackGain.gain.setValueAtTime(4.0, t0);
+        crackGain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.12);
+        crackSrc.connect(crackBpf); crackBpf.connect(crackGain); crackGain.connect(audioCtx.destination);
+        crackSrc.start(t0);
+
+        // 3레이어: 피치 하강 진동음 — 둥~BOOM↓
+        [200, 140, 90, 55].forEach((freq, i) => {
             const o = audioCtx.createOscillator();
             const g = audioCtx.createGain();
             o.type = 'sawtooth';
-            o.frequency.value = freq;
-            const t = audioCtx.currentTime + i * 0.05;
-            g.gain.setValueAtTime(0.8, t);
-            g.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+            o.frequency.setValueAtTime(freq * 2.5, t0 + i * 0.045);
+            o.frequency.exponentialRampToValueAtTime(freq * 0.4, t0 + i * 0.045 + 0.42);
+            g.gain.setValueAtTime(1.5, t0 + i * 0.045);
+            g.gain.exponentialRampToValueAtTime(0.001, t0 + i * 0.045 + 0.48);
             o.connect(g); g.connect(audioCtx.destination);
-            o.start(t); o.stop(t + 0.28);
+            o.start(t0 + i * 0.045);
+            o.stop(t0 + i * 0.045 + 0.5);
+        });
+
+        // 4레이어: 에코 잔향 — 점점 작아지는 여운
+        [0.15, 0.32, 0.52].forEach((delay, i) => {
+            const eLen = Math.floor(audioCtx.sampleRate * 0.25);
+            const eBuf2 = audioCtx.createBuffer(1, eLen, audioCtx.sampleRate);
+            const eData2 = eBuf2.getChannelData(0);
+            for (let j = 0; j < eLen; j++)
+                eData2[j] = (Math.random() * 2 - 1) * Math.pow(1 - j / eLen, 1.8) * (0.6 - i * 0.18);
+            const eSrc2 = audioCtx.createBufferSource();
+            eSrc2.buffer = eBuf2;
+            const eLpf2 = audioCtx.createBiquadFilter();
+            eLpf2.type = 'lowpass'; eLpf2.frequency.value = 350 - i * 80;
+            const eGain2 = audioCtx.createGain();
+            eGain2.gain.setValueAtTime(2.0 - i * 0.6, t0 + delay);
+            eGain2.gain.exponentialRampToValueAtTime(0.001, t0 + delay + 0.28);
+            eSrc2.connect(eLpf2); eLpf2.connect(eGain2); eGain2.connect(audioCtx.destination);
+            eSrc2.start(t0 + delay);
         });
     }
 }
@@ -508,25 +545,34 @@ function drawBricks() {
                     ctx.fillRect(brickX, brickY, brickWidth, brickHeight);
                 }
 
-                // 경계선
+                // 폭탄 그래픽: 검정 반투명 배경 + 붉은 글로우 + 크게
                 if (b.bomb) {
-                    // 폭탄: 붉은 글로우 테두리 + 진동 애니메이션
-                    ctx.strokeStyle = `rgba(255,80,0,${0.7 + 0.3 * Math.sin(Date.now() / 200)})`;
+                    // 1) 검정 반투명 배경 (이모지 가시성 확보)
+                    ctx.globalAlpha = 0.75;
+                    ctx.fillStyle = '#000';
+                    ctx.fillRect(brickX + 1, brickY + 1, brickWidth - 2, brickHeight - 2);
+
+                    // 2) 펄싱 테두리
+                    const pulse = 0.6 + 0.4 * Math.sin(Date.now() / 160);
+                    ctx.globalAlpha = 1;
+                    ctx.strokeStyle = `rgba(255,${Math.floor(60 + pulse * 80)},0,${0.75 + pulse * 0.25})`;
                     ctx.lineWidth = 2;
+                    ctx.strokeRect(brickX + 0.5, brickY + 0.5, brickWidth - 1, brickHeight - 1);
+
+                    // 3) 이모지 + 붉은 섀도우 글로우
+                    const fs = Math.min(brickWidth - 2, brickHeight - 1) * 0.88;
+                    ctx.font = `${fs}px serif`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.shadowColor = `rgba(255,100,0,${0.8 + pulse * 0.2})`;
+                    ctx.shadowBlur = 8 + pulse * 6;
+                    ctx.globalAlpha = 1;
+                    ctx.fillText('💣', brickX + brickWidth / 2, brickY + brickHeight / 2 + 0.5);
+                    ctx.shadowBlur = 0;
                 } else {
                     ctx.strokeStyle = 'rgba(255,255,255,0.3)';
                     ctx.lineWidth = 1;
-                }
-                ctx.strokeRect(brickX, brickY, brickWidth, brickHeight);
-
-                // 폭탄 이모지 오버레이
-                if (b.bomb) {
-                    const fontSize = Math.min(brickWidth, brickHeight) * 0.82;
-                    ctx.font = `${fontSize}px serif`;
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'middle';
-                    ctx.globalAlpha = 0.92;
-                    ctx.fillText('💣', brickX + brickWidth / 2, brickY + brickHeight / 2);
+                    ctx.strokeRect(brickX, brickY, brickWidth, brickHeight);
                 }
                 ctx.restore();
             }
