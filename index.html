@@ -42,12 +42,13 @@
                     <p class="modal-desc">미운 사람 사진을 올려서 통쾌하게 부숴드립니다 🔨</p>
 
                     <div class="upload-row">
-                        <label for="image-upload" class="upload-chip">
+                        <button id="gallery-btn" class="upload-chip">
                             <span>🖼️</span>
                             <span>갤러리에서<br>소환</span>
-                            <input type="file" id="image-upload" accept=".jpg,.jpeg,.png,.gif,.webp,.bmp,.heic,.heif"
-                                hidden>
-                        </label>
+                        </button>
+                        <!-- 파일 선택 input: label과 분리해 JS로만 제어 -->
+                        <input type="file" id="image-upload" accept=".jpg,.jpeg,.png,.gif,.webp,.bmp,.heic,.heif"
+                            hidden>
                         <button id="camera-btn" class="upload-chip">
                             <span>📸</span>
                             <span>지금 바로<br>현행범 촬영</span>

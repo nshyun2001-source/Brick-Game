@@ -9,6 +9,7 @@ const startBtn = document.getElementById('start-btn');
 const restartBtn = document.getElementById('restart-btn');
 const reselectBtn = document.getElementById('reselect-btn');
 const imageUpload = document.getElementById('image-upload');
+const galleryBtn = document.getElementById('gallery-btn');
 const cameraBtn = document.getElementById('camera-btn');
 const captureBtn = document.getElementById('capture-btn');
 const cancelCameraBtn = document.getElementById('cancel-camera-btn');
@@ -280,8 +281,15 @@ function stopCamera() {
     cameraOverlay.classList.remove('active');
 }
 
+// 갤러리 버튼 → 파일 선택 다이얼로그 (JS로 직접 트리거)
+galleryBtn.addEventListener('click', () => {
+    imageUpload.value = '';   // 같은 파일 재선택 허용
+    imageUpload.click();
+});
+
 cameraBtn.addEventListener('click', startCamera);
 cancelCameraBtn.addEventListener('click', stopCamera);
+
 
 captureBtn.addEventListener('click', () => {
     const context = tempCanvas.getContext('2d');

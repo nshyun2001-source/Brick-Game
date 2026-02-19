@@ -136,6 +136,8 @@ body {
 .app-header {
     flex-shrink: 0;
     position: relative;
+    z-index: 1;
+    /* 게임 오버레이(z-index:20)보다 항상 위에 */
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -225,8 +227,9 @@ body {
     position: relative;
     flex: 1;
     overflow: hidden;
+    isolation: isolate;
+    /* 내부 z-index를 외부(app-header)와 완전히 격리 */
     touch-action: none;
-    /* 게임 영역 터치 스크롤 완전 차단 */
     overscroll-behavior: none;
     background: var(--bg-canvas);
 }
