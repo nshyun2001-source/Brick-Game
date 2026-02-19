@@ -24,15 +24,21 @@ const resultTitle = document.getElementById('result-title');
 
 // Game constants
 const PADDLE_HEIGHT = 12;
-const PADDLE_WIDTH = 70;   // 패들 사이즈 축소
+let paddleWidth = 120;    // 현재 패들 크기 (스테이지별 변동)
 const BALL_RADIUS = 6;
-const BALL_SPEED = 6;       // 공의 일정한 속도 (px/프레임)
+const BALL_SPEED = 6;
 const BRICK_ROWS = 16;
 const BRICK_COLS = 10;
 const BRICK_PADDING = 2;
 const BRICK_OFFSET_TOP = 70;
 const BRICK_OFFSET_LEFT = 10;
-const BOMB_COUNT = 11;         // 폭탄 블럭 개수
+const BOMB_COUNT = 11;
+
+// ─── 스테이지 시스템 ──────────────────────────────────────────────
+const MAX_STAGE = 5;
+// 스테이지별 패들 크기 (점점 줄어듬)
+const STAGE_PADDLES = [120, 100, 80, 65, 50];
+let stage = 1;
 
 // ─── Web Audio API 사운드 시스템 ─────────────────────────────────────────
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -237,7 +243,7 @@ let lives = 3;
 let initialLives = 3; // Max retries
 let gameOver = false;
 let gameStarted = false;
-let paddleX = (canvas.width - PADDLE_WIDTH) / 2;
+let paddleX = (canvas.width - paddleWidth) / 2;
 let ballX = canvas.width / 2;
 let ballY = canvas.height - 50;
 let ballDX = 4;
@@ -323,7 +329,7 @@ function resize() {
     const rect = canvas.getBoundingClientRect();
     canvas.width = rect.width;
     canvas.height = rect.height;
-    paddleX = (canvas.width - PADDLE_WIDTH) / 2;
+    paddleX = (canvas.width - paddleWidth) / 2;
 }
 window.addEventListener('resize', resize);
 resize();
@@ -342,7 +348,7 @@ function movePaddleTo(clientX) {
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
     const relativeX = (clientX - rect.left) * scaleX;
-    paddleX = Math.max(0, Math.min(canvas.width - PADDLE_WIDTH, relativeX - PADDLE_WIDTH / 2));
+    paddleX = Math.max(0, Math.min(canvas.width - paddleWidth, relativeX - paddleWidth / 2));
 }
 
 document.addEventListener('mousemove', (e) => movePaddleTo(e.clientX));
@@ -629,7 +635,7 @@ function drawBall() {
 
 function drawPaddle() {
     ctx.beginPath();
-    ctx.rect(paddleX, canvas.height - PADDLE_HEIGHT - 10, PADDLE_WIDTH, PADDLE_HEIGHT);
+    ctx.rect(paddleX, canvas.height - PADDLE_HEIGHT - 10, paddleWidth, PADDLE_HEIGHT);
     ctx.fillStyle = '#ffffff';
     ctx.fill();
     ctx.strokeStyle = '#4e54c8';
@@ -710,26 +716,25 @@ function collisionDetection(dt) {
 
 function updateHUD() {
     scoreDisplay.textContent = score.toString().padStart(4, '0');
-    livesDisplay.textContent = '❤️'.repeat(lives) + '🖤'.repeat(initialLives - lives);
+    livesDisplay.textContent = `⭐${stage} ` + '❤️'.repeat(lives) + '🖤'.repeat(initialLives - lives);
 }
 
 function endGame(win) {
     gameOver = true;
     gameStarted = false;
     finalScoreDisplay.textContent = score;
-    resultTitle.textContent = win ? '💥 완전 박살남!' : '😡 공을 놓쳤다!';
-    resultTitle.style.color = win ? '#00f2fe' : '#ff3e81';
 
-    // If lost, check if lives remain
     const hasLives = lives > 0;
 
+    // ─── 패배 (공 놓침) + 라이프 남아있음 ───
     if (!win && hasLives) {
         const funnyFails = [
             `😤 아직 포기 안 해! (${lives}번 남음)`,
             `💢 이번엔 살려줬다 (${lives}번 남음)`,
-            `🤬 다음엔 가만 안 둬! (${lives}번)`,
+            `🤬 다음엔 가만 안 둡! (${lives}번)`,
         ];
         resultTitle.textContent = funnyFails[Math.floor(Math.random() * funnyFails.length)];
+        resultTitle.style.color = '#ff9f43';
         restartBtn.innerHTML = "🔄 다시 박살내기";
         restartBtn.style.display = "block";
         restartBtn.onclick = () => {
@@ -737,22 +742,42 @@ function endGame(win) {
             continueGame();
         };
         reselectBtn.style.display = "none";
-    } else {
-        const winMessages = [
-            '💥 완전 박살남!',
-            '🎉 응징 완료!',
-            '👊 속이 다 시원해!',
-        ];
-        const loseMessages = [
-            '😭 공이 세상 고단해',
-            '🫠 손이 너무 느려...',
-            '💀 오늘 운 없는 날',
-        ];
-        resultTitle.textContent = win
-            ? winMessages[Math.floor(Math.random() * winMessages.length)]
-            : loseMessages[Math.floor(Math.random() * loseMessages.length)];
 
-        restartBtn.innerHTML = "🔄 다시 박살내기";
+        // ─── 스테이지 클리어! 다음 스테이지 OR 최종 승리 ───
+    } else if (win && stage < MAX_STAGE) {
+        const stageMessages = [
+            `🌟 STAGE ${stage} 클리어!`,
+            `🔥 ${stage}단계 박살 완료!`,
+            `⚡ ${stage}단계 돌파!`,
+        ];
+        resultTitle.textContent = stageMessages[Math.floor(Math.random() * stageMessages.length)];
+        resultTitle.style.color = '#ffd166';
+        finalScoreDisplay.textContent = score;
+
+        restartBtn.innerHTML = `🚀 ${stage + 1}단계 도전!`;
+        restartBtn.style.display = "block";
+        restartBtn.onclick = () => {
+            gameOverOverlay.classList.remove('active');
+            nextStage();
+        };
+        reselectBtn.style.display = "none";
+
+        // ─── 최종 승리 or 최종 패배 ───
+    } else {
+        if (win) {
+            resultTitle.textContent = '🌟👑 전 스테이지 완전 박살! 👑🌟';
+            resultTitle.style.color = '#ffd166';
+        } else {
+            const loseMessages = [
+                '😭 공이 세상 고단해',
+                '🫠 손이 너무 느려...',
+                '💀 오늘 운 없는 날',
+            ];
+            resultTitle.textContent = loseMessages[Math.floor(Math.random() * loseMessages.length)];
+            resultTitle.style.color = '#ff3e81';
+        }
+
+        restartBtn.innerHTML = "🔄 처음부터 다시";
         restartBtn.style.display = "block";
         restartBtn.onclick = () => {
             gameOverOverlay.classList.remove('active');
@@ -832,11 +857,11 @@ function draw(timestamp = 0) {
     } else if (ballY + ballDY * dt > canvas.height - BALL_RADIUS - PADDLE_HEIGHT - 10) {
         const paddleTop = canvas.height - PADDLE_HEIGHT - 10;
         // Paddle collision
-        if (ballX > paddleX && ballX < paddleX + PADDLE_WIDTH &&
+        if (ballX > paddleX && ballX < paddleX + paddleWidth &&
             ballY + ballDY * dt >= paddleTop && ballY <= paddleTop) {
             playSound('wall');
 
-            const hitPos = ((ballX - paddleX) / PADDLE_WIDTH) * 2 - 1;
+            const hitPos = ((ballX - paddleX) / paddleWidth) * 2 - 1;
             const normalizedPos = Math.sign(hitPos) * Math.pow(Math.abs(hitPos), 1.8);
             const MAX_ANGLE = Math.PI / 3;
             const angle = normalizedPos * MAX_ANGLE;
@@ -858,7 +883,7 @@ function draw(timestamp = 0) {
     }
 
     // Move paddle (dt 반영)
-    if (rightPressed && paddleX < canvas.width - PADDLE_WIDTH) {
+    if (rightPressed && paddleX < canvas.width - paddleWidth) {
         paddleX += 7 * dt;
     } else if (leftPressed && paddleX > 0) {
         paddleX -= 7 * dt;
@@ -894,14 +919,35 @@ function continueGame() {
     const launchAngle = (Math.random() - 0.5) * (Math.PI * 80 / 180);
     ballDX = BALL_SPEED * Math.sin(launchAngle);
     ballDY = -BALL_SPEED * Math.cos(launchAngle);
-    paddleX = (canvas.width - PADDLE_WIDTH) / 2;
+    paddleX = (canvas.width - paddleWidth) / 2;
     particles = [];
     flashEffects = [];
-    lastFrameTime = 0; // dt 초기화
+    lastFrameTime = 0;
+    requestAnimationFrame(draw);
+}
+
+function nextStage() {
+    stage++;
+    paddleWidth = STAGE_PADDLES[Math.min(stage - 1, STAGE_PADDLES.length - 1)];
+    gameOver = false;
+    gameStarted = true;
+    ballX = canvas.width / 2;
+    ballY = canvas.height - 80;
+    const launchAngle = (Math.random() - 0.5) * (Math.PI * 80 / 180);
+    ballDX = BALL_SPEED * Math.sin(launchAngle);
+    ballDY = -BALL_SPEED * Math.cos(launchAngle);
+    paddleX = (canvas.width - paddleWidth) / 2;
+    particles = [];
+    flashEffects = [];
+    lastFrameTime = 0;
+    updateHUD();
+    initBricks();
     requestAnimationFrame(draw);
 }
 
 function initGame() {
+    stage = 1;
+    paddleWidth = STAGE_PADDLES[0];
     score = 0;
     lives = 3;
     gameOver = false;
@@ -911,10 +957,11 @@ function initGame() {
     const launchAngle = (Math.random() - 0.5) * (Math.PI * 80 / 180);
     ballDX = BALL_SPEED * Math.sin(launchAngle);
     ballDY = -BALL_SPEED * Math.cos(launchAngle);
+    paddleX = (canvas.width - paddleWidth) / 2;
     particles = [];
     flashEffects = [];
-    lastFrameTime = 0; // dt 초기화
+    lastFrameTime = 0;
     updateHUD();
     initBricks();
-    requestAnimationFrame(draw); // draw() 직접 호출 대신 rAF 사용
+    requestAnimationFrame(draw);
 }
