@@ -352,7 +352,7 @@ class CrumbleParticle {
         this.rotation = Math.random() * Math.PI;
         this.rotSpeed = (Math.random() - 0.5) * 0.3;
         this.alpha = 1;
-        this.decay = 0.012 + Math.random() * 0.008;
+        this.decay = 0.025 + Math.random() * 0.015; // 빠르게 사라짐
         this.color = color;
     }
     draw() {
@@ -659,23 +659,18 @@ function drawBricks() {
 
                     // 2) 만화풍 펀탄 테두리 (노란+빨간 교차)
                     ctx.globalAlpha = 1;
-                    ctx.shadowBlur = 6 + pulse * 8;
-                    ctx.shadowColor = `rgba(255, ${Math.floor(180 + pulse * 75)}, 0, 0.9)`;
                     ctx.strokeStyle = `rgba(255, ${Math.floor(200 + pulse * 55)}, 0, 1)`;
                     ctx.lineWidth = 2;
                     ctx.strokeRect(brickX + 0.5, brickY + 0.5, brickWidth - 1, brickHeight - 1);
 
-                    // 3) 폭탄 이모지 (로테이션 애니메이션 + 살짝 흐들림)
+                    // 3) 폭탄 이모지 (흐들림)
                     const fs = Math.min(brickWidth, brickHeight) * 0.92;
                     ctx.font = `${fs}px serif`;
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
                     const wobbleX = Math.sin(Date.now() / 80) * 1.2;
                     const wobbleY = Math.cos(Date.now() / 100) * 0.8;
-                    ctx.shadowBlur = 10;
-                    ctx.shadowColor = '#ffcc00';
                     ctx.fillText(funnyEmoji, brickX + brickWidth / 2 + wobbleX, brickY + brickHeight / 2 + wobbleY + 1);
-                    ctx.shadowBlur = 0;
                 } else {
                     ctx.strokeStyle = 'rgba(255,255,255,0.3)';
                     ctx.lineWidth = 1;
@@ -803,9 +798,10 @@ function collisionDetection(dt) {
                     ballDY = -ballDY;
                 }
 
-                // 속도 점진적 증가
+                // 속도: 스테이지 + 점수 기반 점진적 증가
                 const currentSpeed = Math.hypot(ballDX, ballDY);
-                const targetSpeed = BALL_SPEED + (score / (BRICK_ROWS * BRICK_COLS * 10)) * 2;
+                const stageBonus = (stage - 1) * 1.0;
+                const targetSpeed = BALL_SPEED + stageBonus + (score / (BRICK_ROWS * BRICK_COLS * 10)) * 2;
                 const scale = targetSpeed / currentSpeed;
                 ballDX *= scale;
                 ballDY *= scale;
@@ -1050,8 +1046,9 @@ function nextStage() {
     ballX = canvas.width / 2;
     ballY = canvas.height - 80;
     const launchAngle = (Math.random() - 0.5) * (Math.PI * 80 / 180);
-    ballDX = BALL_SPEED * Math.sin(launchAngle);
-    ballDY = -BALL_SPEED * Math.cos(launchAngle);
+    const stageSpeed = BALL_SPEED + (stage - 1) * 1.0;
+    ballDX = stageSpeed * Math.sin(launchAngle);
+    ballDY = -stageSpeed * Math.cos(launchAngle);
     paddleX = (canvas.width - paddleWidth) / 2;
     particles = [];
     flashEffects = [];
