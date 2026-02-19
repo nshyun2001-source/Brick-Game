@@ -47,74 +47,116 @@ function playSound(type) {
     if (audioCtx.state === 'suspended') audioCtx.resume();
 
     if (type === 'shatter') {
-        // 벽돌 깨지는 소리: 짧은 노이즈 버스트 + 피치 드롭
-        const bufferSize = audioCtx.sampleRate * 0.15;
-        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-        const data = buffer.getChannelData(0);
-        for (let i = 0; i < bufferSize; i++) {
-            data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufferSize, 2);
-        }
-        const source = audioCtx.createBufferSource();
-        source.buffer = buffer;
-
-        const gainNode = audioCtx.createGain();
-        gainNode.gain.setValueAtTime(0.8, audioCtx.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
-
-        const filter = audioCtx.createBiquadFilter();
-        filter.type = 'bandpass';
-        filter.frequency.value = 1200;
-        filter.Q.value = 0.8;
-
-        source.connect(filter);
-        filter.connect(gainNode);
-        gainNode.connect(audioCtx.destination);
-        source.start();
+        // 🪨 유리 파편음: 날카롬게 쯭어지는 실감
+        const t0 = audioCtx.currentTime;
+        // 가) 날카로운 쯭어짐 (찰칝!)
+        const bufSz = Math.floor(audioCtx.sampleRate * 0.08);
+        const buf = audioCtx.createBuffer(1, bufSz, audioCtx.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < bufSz; i++)
+            d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufSz, 3.5);
+        const src = audioCtx.createBufferSource(); src.buffer = buf;
+        const hpf = audioCtx.createBiquadFilter();
+        hpf.type = 'highpass'; hpf.frequency.value = 1800;
+        const gn = audioCtx.createGain();
+        gn.gain.setValueAtTime(1.5, t0);
+        gn.gain.exponentialRampToValueAtTime(0.001, t0 + 0.08);
+        src.connect(hpf); hpf.connect(gn); gn.connect(audioCtx.destination);
+        src.start(t0);
+        // 나) 잔해 떨어지는 소리
+        const tinySz = Math.floor(audioCtx.sampleRate * 0.2);
+        const tinyBuf = audioCtx.createBuffer(1, tinySz, audioCtx.sampleRate);
+        const td = tinyBuf.getChannelData(0);
+        for (let i = 0; i < tinySz; i++)
+            td[i] = (Math.random() * 2 - 1) * 0.15 * Math.pow(1 - i / tinySz, 1.5) * (Math.sin(i * 0.3) > 0 ? 1 : 0.3);
+        const tSrc = audioCtx.createBufferSource(); tSrc.buffer = tinyBuf;
+        const tGn = audioCtx.createGain();
+        tGn.gain.setValueAtTime(0.8, t0 + 0.03);
+        tGn.gain.exponentialRampToValueAtTime(0.001, t0 + 0.2);
+        tSrc.connect(tGn); tGn.connect(audioCtx.destination);
+        tSrc.start(t0 + 0.03);
 
     } else if (type === 'wall') {
-        // 패들/벽 반사음: 짧고 선명한 틱
+        // 🏓 탄성 바운스음: 단단한 타격감
+        const t0 = audioCtx.currentTime;
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
-        osc.type = 'square';
-        osc.frequency.setValueAtTime(440, audioCtx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(200, audioCtx.currentTime + 0.05);
-        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.06);
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.start();
-        osc.stop(audioCtx.currentTime + 0.06);
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(800, t0);
+        osc.frequency.exponentialRampToValueAtTime(250, t0 + 0.04);
+        gain.gain.setValueAtTime(0.5, t0);
+        gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.05);
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(t0); osc.stop(t0 + 0.06);
+        // 서브 타격감
+        const sub = audioCtx.createOscillator();
+        const sg = audioCtx.createGain();
+        sub.type = 'sine'; sub.frequency.value = 120;
+        sg.gain.setValueAtTime(0.3, t0);
+        sg.gain.exponentialRampToValueAtTime(0.001, t0 + 0.04);
+        sub.connect(sg); sg.connect(audioCtx.destination);
+        sub.start(t0); sub.stop(t0 + 0.05);
 
     } else if (type === 'lose') {
-        // 공 落下 실패음: 낮아지는 3음 하강
-        [300, 220, 160].forEach((freq, i) => {
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            osc.type = 'sawtooth';
-            osc.frequency.value = freq;
-            const t = audioCtx.currentTime + i * 0.12;
-            gain.gain.setValueAtTime(0.4, t);
-            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
-            osc.start(t);
-            osc.stop(t + 0.12);
-        });
+        // 😵 코믹한 추락음: 휘익~ 탁! 삐이익↓
+        const t0 = audioCtx.currentTime;
+        // 휠익~ (남어림)
+        const o1 = audioCtx.createOscillator(); const g1 = audioCtx.createGain();
+        o1.type = 'sine';
+        o1.frequency.setValueAtTime(800, t0);
+        o1.frequency.exponentialRampToValueAtTime(80, t0 + 0.5);
+        g1.gain.setValueAtTime(0.5, t0);
+        g1.gain.exponentialRampToValueAtTime(0.001, t0 + 0.5);
+        o1.connect(g1); g1.connect(audioCtx.destination);
+        o1.start(t0); o1.stop(t0 + 0.55);
+        // 탁! (착지)
+        const impSz = Math.floor(audioCtx.sampleRate * 0.05);
+        const impBuf = audioCtx.createBuffer(1, impSz, audioCtx.sampleRate);
+        const impD = impBuf.getChannelData(0);
+        for (let i = 0; i < impSz; i++) impD[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / impSz, 5);
+        const impSrc = audioCtx.createBufferSource(); impSrc.buffer = impBuf;
+        const impG = audioCtx.createGain();
+        impG.gain.setValueAtTime(2.0, t0 + 0.35);
+        impG.gain.exponentialRampToValueAtTime(0.001, t0 + 0.4);
+        impSrc.connect(impG); impG.connect(audioCtx.destination);
+        impSrc.start(t0 + 0.35);
+        // 삐이익 (습한 이명)
+        const ring = audioCtx.createOscillator(); const rg = audioCtx.createGain();
+        ring.type = 'sine'; ring.frequency.value = 2500;
+        rg.gain.setValueAtTime(0.08, t0 + 0.38);
+        rg.gain.exponentialRampToValueAtTime(0.001, t0 + 0.9);
+        ring.connect(rg); rg.connect(audioCtx.destination);
+        ring.start(t0 + 0.38); ring.stop(t0 + 1.0);
 
     } else if (type === 'win') {
-        // 클리어 팡파레: 상승하는 화음
+        // 🎉 승리 팡파레: 실감나는 화음 + 멜로디 상승
+        const t0 = audioCtx.currentTime;
+        // 멜로디 4음: 도미솔라도~
         [523, 659, 784, 1047].forEach((freq, i) => {
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            osc.type = 'sine';
-            osc.frequency.value = freq;
-            const t = audioCtx.currentTime + i * 0.1;
-            gain.gain.setValueAtTime(0.35, t);
-            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
-            osc.start(t);
-            osc.stop(t + 0.35);
+            ['sine', 'triangle'].forEach(tp => {
+                const o = audioCtx.createOscillator();
+                const g = audioCtx.createGain();
+                o.type = tp;
+                o.frequency.value = freq;
+                const t = t0 + i * 0.12;
+                g.gain.setValueAtTime(tp === 'sine' ? 0.35 : 0.12, t);
+                g.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
+                o.connect(g); g.connect(audioCtx.destination);
+                o.start(t); o.stop(t + 0.5);
+            });
+        });
+        // 심벨즈 콤보 (삐★삐★삐!)
+        [0.5, 0.55, 0.6].forEach((delay, i) => {
+            const nSz = Math.floor(audioCtx.sampleRate * 0.06);
+            const nBuf = audioCtx.createBuffer(1, nSz, audioCtx.sampleRate);
+            const nd = nBuf.getChannelData(0);
+            for (let j = 0; j < nSz; j++) nd[j] = (Math.random() * 2 - 1) * Math.pow(1 - j / nSz, 4);
+            const ns = audioCtx.createBufferSource(); ns.buffer = nBuf;
+            const ng = audioCtx.createGain();
+            ng.gain.setValueAtTime(1.5 - i * 0.3, t0 + delay);
+            ng.gain.exponentialRampToValueAtTime(0.001, t0 + delay + 0.08);
+            ns.connect(ng); ng.connect(audioCtx.destination);
+            ns.start(t0 + delay);
         });
 
     } else if (type === 'camera-click') {
@@ -555,38 +597,39 @@ function drawBricks() {
                     ctx.fillRect(brickX, brickY, brickWidth, brickHeight);
                 }
 
-                // 폭탄 그래픽: 강렬한 가시성 개선
+                // 폭탄 그래픽: 유머러스 만화풍
                 if (b.bomb) {
                     const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 150);
+                    const tick = Math.floor(Date.now() / 600) % 4;
+                    const funnyEmoji = ['💣', '🧨', '💥', '😈'][tick];
 
-                    // 1) 강인한 검정 프레임 & 배경
-                    ctx.globalAlpha = 0.85;
-                    ctx.fillStyle = '#000';
+                    // 1) 노란 경고색 배경
+                    ctx.globalAlpha = 0.92;
+                    const warnGrad = ctx.createLinearGradient(brickX, brickY, brickX + brickWidth, brickY + brickHeight);
+                    warnGrad.addColorStop(0, '#1a0500');
+                    warnGrad.addColorStop(0.5, `rgba(80, 10, 0, ${0.8 + pulse * 0.2})`);
+                    warnGrad.addColorStop(1, '#1a0500');
+                    ctx.fillStyle = warnGrad;
                     ctx.fillRect(brickX, brickY, brickWidth, brickHeight);
 
-                    // 2) 타오르는 화염 글로우 테두리
+                    // 2) 만화풍 펀탄 테두리 (노란+빨간 교차)
                     ctx.globalAlpha = 1;
-                    ctx.shadowBlur = 10 + pulse * 10;
-                    ctx.shadowColor = `rgba(255, 60, 0, ${0.5 + pulse * 0.5})`;
-                    ctx.strokeStyle = `rgba(255, ${Math.floor(50 + pulse * 150)}, 0, 1)`;
-                    ctx.lineWidth = 2.5;
-                    ctx.strokeRect(brickX + 1, brickY + 1, brickWidth - 2, brickHeight - 2);
+                    ctx.shadowBlur = 6 + pulse * 8;
+                    ctx.shadowColor = `rgba(255, ${Math.floor(180 + pulse * 75)}, 0, 0.9)`;
+                    ctx.strokeStyle = `rgba(255, ${Math.floor(200 + pulse * 55)}, 0, 1)`;
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(brickX + 0.5, brickY + 0.5, brickWidth - 1, brickHeight - 1);
 
-                    // 3) 중앙 폭탄 이모지 & 광원 효과
-                    const fs = Math.min(brickWidth, brickHeight) * 0.95;
-                    ctx.font = `bold ${fs}px serif`;
+                    // 3) 폭탄 이모지 (로테이션 애니메이션 + 살짝 흐들림)
+                    const fs = Math.min(brickWidth, brickHeight) * 0.92;
+                    ctx.font = `${fs}px serif`;
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
-
-                    // 배경에 살짝 붉은 빛
-                    ctx.fillStyle = `rgba(255, 0, 0, ${0.1 + pulse * 0.2})`;
-                    ctx.fillRect(brickX + 2, brickY + 2, brickWidth - 4, brickHeight - 4);
-
-                    ctx.shadowBlur = 15;
-                    ctx.shadowColor = '#ff3e10';
-                    ctx.fillStyle = '#fff'; // 흰색 느낌의 강한 광원
-                    ctx.fillText('💣', brickX + brickWidth / 2, brickY + brickHeight / 2 + 1);
-
+                    const wobbleX = Math.sin(Date.now() / 80) * 1.2;
+                    const wobbleY = Math.cos(Date.now() / 100) * 0.8;
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = '#ffcc00';
+                    ctx.fillText(funnyEmoji, brickX + brickWidth / 2 + wobbleX, brickY + brickHeight / 2 + wobbleY + 1);
                     ctx.shadowBlur = 0;
                 } else {
                     ctx.strokeStyle = 'rgba(255,255,255,0.3)';
@@ -611,9 +654,9 @@ function triggerExplosion(startC, startR) {
         if (visited.has(key)) continue;
         visited.add(key);
 
-        // 주변 3×3 파괴
-        for (let dc = -1; dc <= 1; dc++) {
-            for (let dr = -1; dr <= 1; dr++) {
+        // 주변 6×6 파괴 (중심에서 -2 ~ +3 범위)
+        for (let dc = -2; dc <= 3; dc++) {
+            for (let dr = -2; dr <= 3; dr++) {
                 if (dc === 0 && dr === 0) continue;
                 const nc = ec + dc, nr = er + dr;
                 if (nc < 0 || nc >= BRICK_COLS || nr < 0 || nr >= BRICK_ROWS) continue;
@@ -623,7 +666,7 @@ function triggerExplosion(startC, startR) {
                 nb.status = 0;
                 score += 10;
                 createParticles(nb);
-                // 연쇄 폭발: 인접 폭탄도 탁령!
+                // 연쇄 폭발: 범위 내 폭탄도 터짐!
                 if (nb.bomb) queue.push([nc, nr]);
             }
         }
