@@ -47,11 +47,22 @@
     -webkit-tap-highlight-color: transparent;
 }
 
-html,
-body {
+html {
+    /* iOS Safari 주소창/탭바 스크롤 완전 고정 */
+    position: fixed;
     width: 100%;
     height: 100%;
     overflow: hidden;
+}
+
+body {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
     background: var(--bg-body);
     color: var(--text);
     font-family: 'Outfit', sans-serif;
@@ -60,6 +71,8 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
+    /* iOS Safe Area(노치/홈바) 대응 */
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
 /* ══════════════════════════════════════════════
@@ -74,6 +87,8 @@ body {
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    touch-action: none;
+    /* 앱셸 전체 스크롤 차단 */
     background: linear-gradient(180deg, var(--bg-shell-top) 0%, var(--bg-shell-bot) 100%);
     border-radius: 38px;
     box-shadow:
@@ -212,6 +227,9 @@ body {
     position: relative;
     flex: 1;
     overflow: hidden;
+    touch-action: none;
+    /* 게임 영역 터치 스크롤 완전 차단 */
+    overscroll-behavior: none;
     background: var(--bg-canvas);
 }
 

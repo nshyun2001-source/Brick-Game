@@ -232,7 +232,18 @@ canvas.addEventListener('touchstart', (e) => {
     movePaddleTo(e.touches[0].clientX);
 }, { passive: false });
 
-// Image handling
+// ─── iOS Safari 전체 스크롤/바운스 차단 ─────────────────────────────────
+document.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+}, { passive: false });
+
+document.addEventListener('touchstart', (e) => {
+    // 파일 인풋, 버튼 등 UI 요소는 기본 동작 허용 (클릭 가능하게)
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON' || e.target.tagName === 'LABEL') return;
+    e.preventDefault();
+}, { passive: false });
+
+
 imageUpload.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;
