@@ -47,18 +47,8 @@
     -webkit-tap-highlight-color: transparent;
 }
 
-html {
-    /* iOS Safari 주소창/탭바 스크롤 완전 고정 */
-    position: fixed;
-    width: 100%;
-    height: 100%;
-    overflow: hidden;
-}
-
+html,
 body {
-    position: fixed;
-    top: 0;
-    left: 0;
     width: 100%;
     height: 100%;
     overflow: hidden;
@@ -75,6 +65,7 @@ body {
     padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
+
 /* ══════════════════════════════════════════════
    앱 셸 — 19.5:9 고정 비율
 ══════════════════════════════════════════════ */
@@ -88,7 +79,6 @@ body {
     flex-direction: column;
     overflow: hidden;
     touch-action: none;
-    /* 앱셸 전체 스크롤 차단 */
     background: linear-gradient(180deg, var(--bg-shell-top) 0%, var(--bg-shell-bot) 100%);
     border-radius: 38px;
     box-shadow:
