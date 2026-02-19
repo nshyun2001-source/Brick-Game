@@ -299,6 +299,7 @@ let leftPressed = false;
 let bricks = [];
 let particles = [];
 let flashEffects = []; // 순간 번쩍임 효과
+let crumbleParticles = []; // 무너지는 블럭 파편
 let sourceImage = null;
 
 // ─── Delta Time (FPS 독립적 속도 보정) ──────────────────────────────────────
@@ -338,6 +339,41 @@ class Particle {
     }
 }
 
+// ─── 무너지는 블럭 파편 (폭탄 폭발용) ───────────────────────────
+class CrumbleParticle {
+    constructor(x, y, w, h, color) {
+        this.x = x;
+        this.y = y;
+        this.w = w * (0.3 + Math.random() * 0.7); // 랜덤 크기 파편
+        this.h = h * (0.3 + Math.random() * 0.7);
+        this.vx = (Math.random() - 0.5) * 4;
+        this.vy = Math.random() * 2 - 3;   // 살짝 위로 튀었다가 떨어짐
+        this.gravity = 0.35;               // 무거운 느낌
+        this.rotation = Math.random() * Math.PI;
+        this.rotSpeed = (Math.random() - 0.5) * 0.3;
+        this.alpha = 1;
+        this.decay = 0.012 + Math.random() * 0.008;
+        this.color = color;
+    }
+    draw() {
+        if (this.alpha <= 0) return;
+        ctx.save();
+        ctx.globalAlpha = this.alpha;
+        ctx.translate(this.x + this.w / 2, this.y + this.h / 2);
+        ctx.rotate(this.rotation);
+        ctx.fillStyle = this.color;
+        ctx.fillRect(-this.w / 2, -this.h / 2, this.w, this.h);
+        ctx.restore();
+    }
+    update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.vy += this.gravity;
+        this.rotation += this.rotSpeed;
+        this.alpha -= this.decay;
+    }
+}
+
 class FlashEffect {
     constructor(x, y, w, h) {
         this.x = x; this.y = y; this.w = w; this.h = h;
@@ -354,9 +390,8 @@ class FlashEffect {
     update() { this.alpha -= this.decay; }
 }
 
-function createParticles(brick) {
-    const COUNT = 6; // 적고 단순하게
-    // 벽돌 중심 색상 샘플 (사진 or 기본색)
+function createParticles(brick, isBombBlast) {
+    const COUNT = isBombBlast ? 3 : 6;
     const colors = ['#ff3e81', '#00f2fe', '#ffffff', '#ffef60', '#ff9f43'];
     for (let i = 0; i < COUNT; i++) {
         const px = brick.x + Math.random() * brick.w;
@@ -364,8 +399,18 @@ function createParticles(brick) {
         const color = colors[Math.floor(Math.random() * colors.length)];
         particles.push(new Particle(px, py, color));
     }
-    // 번쩍임 효과
     flashEffects.push(new FlashEffect(brick.x, brick.y, brick.w, brick.h));
+
+    // 폭탄 폭발: 무너지는 블럭 파편 추가
+    if (isBombBlast) {
+        const crumbleColors = ['#8b4513', '#a0522d', '#cd853f', '#d2691e', '#696969', '#555'];
+        for (let i = 0; i < 4; i++) {
+            const cx = brick.x + Math.random() * brick.w * 0.5;
+            const cy = brick.y;
+            const cc = crumbleColors[Math.floor(Math.random() * crumbleColors.length)];
+            crumbleParticles.push(new CrumbleParticle(cx, cy, brick.w * 0.4, brick.h * 0.6, cc));
+        }
+    }
 }
 
 
@@ -643,8 +688,14 @@ function drawBricks() {
 }
 
 // ─── 폭탄 BFS 연쇄 폭발 ────────────────────────────────────────────────
+function allBricksCleared() {
+    for (let c = 0; c < BRICK_COLS; c++)
+        for (let r = 0; r < BRICK_ROWS; r++)
+            if (bricks[c][r].status === 1) return false;
+    return true;
+}
+
 function triggerExplosion(startC, startR) {
-    // BFS: 폰탄 사슬된 위치에서 BFS로 연쇄
     const queue = [[startC, startR]];
     const visited = new Set();
 
@@ -654,7 +705,7 @@ function triggerExplosion(startC, startR) {
         if (visited.has(key)) continue;
         visited.add(key);
 
-        // 주변 6×6 파괴 (중심에서 -2 ~ +3 범위)
+        // 주변 6×6 파괴
         for (let dc = -2; dc <= 3; dc++) {
             for (let dr = -2; dr <= 3; dr++) {
                 if (dc === 0 && dr === 0) continue;
@@ -665,15 +716,13 @@ function triggerExplosion(startC, startR) {
 
                 nb.status = 0;
                 score += 10;
-                createParticles(nb);
-                // 연쇄 폭발: 범위 내 폭탄도 터짐!
+                createParticles(nb, true); // 폭탄 파편으로 렌더
                 if (nb.bomb) queue.push([nc, nr]);
             }
         }
     }
     updateHUD();
-    // 클리어 체크
-    if (score >= BRICK_ROWS * BRICK_COLS * 10) endGame(true);
+    if (allBricksCleared()) endGame(true);
 }
 
 function drawBall() {
@@ -761,7 +810,7 @@ function collisionDetection(dt) {
                 ballDX *= scale;
                 ballDY *= scale;
 
-                if (score >= BRICK_ROWS * BRICK_COLS * 10) {
+                if (score >= BRICK_ROWS * BRICK_COLS * 10 || allBricksCleared()) {
                     endGame(true);
                 }
                 return;
@@ -891,6 +940,15 @@ function draw(timestamp = 0) {
         }
     }
 
+    // 무너지는 블럭 파편 렌더
+    for (let i = crumbleParticles.length - 1; i >= 0; i--) {
+        crumbleParticles[i].update();
+        crumbleParticles[i].draw();
+        if (crumbleParticles[i].alpha <= 0 || crumbleParticles[i].y > canvas.height + 50) {
+            crumbleParticles.splice(i, 1);
+        }
+    }
+
     drawBall();
     drawPaddle();
     collisionDetection(dt);
@@ -978,6 +1036,7 @@ function continueGame() {
     paddleX = (canvas.width - paddleWidth) / 2;
     particles = [];
     flashEffects = [];
+    crumbleParticles = [];
     lastFrameTime = 0;
     requestAnimationFrame(draw);
 }
@@ -985,6 +1044,7 @@ function continueGame() {
 function nextStage() {
     stage++;
     paddleWidth = STAGE_PADDLES[Math.min(stage - 1, STAGE_PADDLES.length - 1)];
+    score = 0;  // 스코어 초기화 (클리어 체크 버그 방지)
     gameOver = false;
     gameStarted = true;
     ballX = canvas.width / 2;
@@ -995,6 +1055,7 @@ function nextStage() {
     paddleX = (canvas.width - paddleWidth) / 2;
     particles = [];
     flashEffects = [];
+    crumbleParticles = [];
     lastFrameTime = 0;
     updateHUD();
     initBricks();
@@ -1016,6 +1077,7 @@ function initGame() {
     paddleX = (canvas.width - paddleWidth) / 2;
     particles = [];
     flashEffects = [];
+    crumbleParticles = [];
     lastFrameTime = 0;
     updateHUD();
     initBricks();
