@@ -32,6 +32,7 @@ const BRICK_COLS = 10;
 const BRICK_PADDING = 2;
 const BRICK_OFFSET_TOP = 70;
 const BRICK_OFFSET_LEFT = 10;
+const BOMB_COUNT = 5;          // 폭탄 블럭 개수
 
 // ─── Web Audio API 사운드 시스템 ─────────────────────────────────────────
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -158,6 +159,37 @@ function playSound(type) {
             gain.connect(audioCtx.destination);
             osc.start(t);
             osc.stop(t + 0.25);
+        });
+
+    } else if (type === 'bomb-explosion') {
+        // 💥 폭탄 폭발음: 다이나믹 저음 + 충격파
+        // 1) 로우 바스 잡음
+        const eBuf = audioCtx.createBuffer(1, Math.floor(audioCtx.sampleRate * 0.5), audioCtx.sampleRate);
+        const eData = eBuf.getChannelData(0);
+        for (let i = 0; i < eData.length; i++) {
+            eData[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / eData.length, 1.2);
+        }
+        const eSrc = audioCtx.createBufferSource();
+        eSrc.buffer = eBuf;
+        const eLpf = audioCtx.createBiquadFilter();
+        eLpf.type = 'lowpass';
+        eLpf.frequency.value = 300;
+        const eGain = audioCtx.createGain();
+        eGain.gain.setValueAtTime(3.5, audioCtx.currentTime);
+        eGain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.5);
+        eSrc.connect(eLpf); eLpf.connect(eGain); eGain.connect(audioCtx.destination);
+        eSrc.start();
+        // 2) 충격파 공명
+        [180, 120, 80].forEach((freq, i) => {
+            const o = audioCtx.createOscillator();
+            const g = audioCtx.createGain();
+            o.type = 'sawtooth';
+            o.frequency.value = freq;
+            const t = audioCtx.currentTime + i * 0.05;
+            g.gain.setValueAtTime(0.8, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+            o.connect(g); g.connect(audioCtx.destination);
+            o.start(t); o.stop(t + 0.28);
         });
     }
 }
@@ -414,17 +446,16 @@ captureBtn.addEventListener('click', () => {
 function initBricks() {
     const availableWidth = canvas.width - BRICK_OFFSET_LEFT * 2;
     const brickWidth = (availableWidth / BRICK_COLS) - BRICK_PADDING;
-    const brickHeight = 18; // Shorter height for rectangular look
+    const brickHeight = 18;
 
     bricks = [];
     for (let c = 0; c < BRICK_COLS; c++) {
         bricks[c] = [];
         for (let r = 0; r < BRICK_ROWS; r++) {
             bricks[c][r] = {
-                x: 0,
-                y: 0,
+                x: 0, y: 0,
                 status: 1,
-                // These are for cropping the source image
+                bomb: false,
                 srcX: (c / BRICK_COLS),
                 srcY: (r / BRICK_ROWS),
                 srcW: (1 / BRICK_COLS),
@@ -433,6 +464,20 @@ function initBricks() {
                 h: brickHeight
             };
         }
+    }
+
+    // 폽탄 랜덤 배치 (Fisher-Yates 셔플)
+    const positions = [];
+    for (let c = 0; c < BRICK_COLS; c++)
+        for (let r = 0; r < BRICK_ROWS; r++)
+            positions.push([c, r]);
+    for (let i = positions.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [positions[i], positions[j]] = [positions[j], positions[i]];
+    }
+    for (let i = 0; i < BOMB_COUNT; i++) {
+        const [bc, br] = positions[i];
+        bricks[bc][br].bomb = true;
     }
 }
 
@@ -447,38 +492,80 @@ function drawBricks() {
             if (b.status === 1) {
                 const brickX = c * (brickWidth + BRICK_PADDING) + BRICK_OFFSET_LEFT;
                 const brickY = r * (brickHeight + BRICK_PADDING) + BRICK_OFFSET_TOP;
-                b.x = brickX;
-                b.y = brickY;
-                b.w = brickWidth;
-                b.h = brickHeight;
+                b.x = brickX; b.y = brickY;
+                b.w = brickWidth; b.h = brickHeight;
 
                 ctx.save();
-                // Draw clipped image
                 if (sourceImage) {
                     ctx.drawImage(
                         sourceImage,
-                        b.srcX * sourceImage.width,
-                        b.srcY * sourceImage.height,
-                        b.srcW * sourceImage.width,
-                        b.srcH * sourceImage.height,
-                        brickX,
-                        brickY,
-                        brickWidth,
-                        brickHeight
+                        b.srcX * sourceImage.width, b.srcY * sourceImage.height,
+                        b.srcW * sourceImage.width, b.srcH * sourceImage.height,
+                        brickX, brickY, brickWidth, brickHeight
                     );
                 } else {
-                    ctx.fillStyle = '#ff3e81';
+                    ctx.fillStyle = b.bomb ? '#ff3e10' : '#ff3e81';
                     ctx.fillRect(brickX, brickY, brickWidth, brickHeight);
                 }
 
-                // Add border/polish
-                ctx.strokeStyle = 'rgba(255,255,255,0.3)';
-                ctx.lineWidth = 1;
+                // 경계선
+                if (b.bomb) {
+                    // 폭탄: 붉은 글로우 테두리 + 진동 애니메이션
+                    ctx.strokeStyle = `rgba(255,80,0,${0.7 + 0.3 * Math.sin(Date.now() / 200)})`;
+                    ctx.lineWidth = 2;
+                } else {
+                    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+                    ctx.lineWidth = 1;
+                }
                 ctx.strokeRect(brickX, brickY, brickWidth, brickHeight);
+
+                // 폭탄 이모지 오버레이
+                if (b.bomb) {
+                    const fontSize = Math.min(brickWidth, brickHeight) * 0.82;
+                    ctx.font = `${fontSize}px serif`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.globalAlpha = 0.92;
+                    ctx.fillText('💣', brickX + brickWidth / 2, brickY + brickHeight / 2);
+                }
                 ctx.restore();
             }
         }
     }
+}
+
+// ─── 폭탄 BFS 연쇄 폭발 ────────────────────────────────────────────────
+function triggerExplosion(startC, startR) {
+    // BFS: 폰탄 사슬된 위치에서 BFS로 연쇄
+    const queue = [[startC, startR]];
+    const visited = new Set();
+
+    while (queue.length > 0) {
+        const [ec, er] = queue.shift();
+        const key = `${ec},${er}`;
+        if (visited.has(key)) continue;
+        visited.add(key);
+
+        // 주변 3×3 파괴
+        for (let dc = -1; dc <= 1; dc++) {
+            for (let dr = -1; dr <= 1; dr++) {
+                if (dc === 0 && dr === 0) continue;
+                const nc = ec + dc, nr = er + dr;
+                if (nc < 0 || nc >= BRICK_COLS || nr < 0 || nr >= BRICK_ROWS) continue;
+                const nb = bricks[nc][nr];
+                if (nb.status !== 1) continue;
+
+                nb.status = 0;
+                score += 10;
+                createParticles(nb);
+                // 연쇄 폭발: 인접 폭탄도 탁령!
+                if (nb.bomb) queue.push([nc, nr]);
+            }
+        }
+    }
+    updateHUD();
+    // 클리어 체크
+    if (score >= BRICK_ROWS * BRICK_COLS * 10) endGame(true);
 }
 
 function drawBall() {
@@ -527,10 +614,24 @@ function collisionDetection(dt) {
                 b.status = 0;
                 score += 10;
                 updateHUD();
-                playSound('shatter');
                 createParticles(b);
 
-                // 어느 면에 침는지 케스 별 판단
+                if (b.bomb) {
+                    // 폭탄! 폭발음 + 대형 파티클 추가
+                    playSound('bomb-explosion');
+                    // 화면 흐들림
+                    const boomFlash = document.createElement('div');
+                    boomFlash.style.cssText = 'position:fixed;inset:0;z-index:9998;background:rgba(255,120,0,0.35);pointer-events:none;transition:opacity 0.3s ease;';
+                    document.body.appendChild(boomFlash);
+                    setTimeout(() => { boomFlash.style.opacity = '0'; }, 60);
+                    setTimeout(() => { boomFlash.remove(); }, 360);
+                    // 연쇄 파괴
+                    triggerExplosion(c, r);
+                } else {
+                    playSound('shatter');
+                }
+
+                // 충돌 방향 반사
                 const overlapLeft = (ballX + BALL_RADIUS) - bLeft;
                 const overlapRight = bRight - (ballX - BALL_RADIUS);
                 const overlapTop = (ballY + BALL_RADIUS) - bTop;
@@ -545,14 +646,14 @@ function collisionDetection(dt) {
                     ballDY = -ballDY;
                 }
 
-                // 속도 점진적 증가 (점수에 따라)
+                // 속도 점진적 증가
                 const currentSpeed = Math.hypot(ballDX, ballDY);
                 const targetSpeed = BALL_SPEED + (score / (BRICK_ROWS * BRICK_COLS * 10)) * 2;
                 const scale = targetSpeed / currentSpeed;
                 ballDX *= scale;
                 ballDY *= scale;
 
-                if (score === BRICK_ROWS * BRICK_COLS * 10) {
+                if (score >= BRICK_ROWS * BRICK_COLS * 10) {
                     endGame(true);
                 }
                 return;
