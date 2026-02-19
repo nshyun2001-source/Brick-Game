@@ -250,7 +250,8 @@ function createParticles(brick) {
 
 // Initialize canvas size
 function resize() {
-    const rect = canvas.parentElement.getBoundingClientRect();
+    // canvas 자체의 실제 렌더 영역 기준 (padding-bottom safe area 적용 시 부모 rect ≠ 캔버스 rect)
+    const rect = canvas.getBoundingClientRect();
     canvas.width = rect.width;
     canvas.height = rect.height;
     paddleX = (canvas.width - PADDLE_WIDTH) / 2;
