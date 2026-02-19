@@ -32,7 +32,7 @@ const BRICK_COLS = 10;
 const BRICK_PADDING = 2;
 const BRICK_OFFSET_TOP = 70;
 const BRICK_OFFSET_LEFT = 10;
-const BOMB_COUNT = 5;          // 폭탄 블럭 개수
+const BOMB_COUNT = 11;         // 폭탄 블럭 개수
 
 // ─── Web Audio API 사운드 시스템 ─────────────────────────────────────────
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
