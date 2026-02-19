@@ -142,6 +142,23 @@ function playSound(type) {
         osc2.connect(g2); g2.connect(audioCtx.destination);
         osc2.start(audioCtx.currentTime + 0.03);
         osc2.stop(audioCtx.currentTime + 0.14);
+
+    } else if (type === 'photo-select') {
+        // 🖼️ 걤러리 사진 선택음: 경쾾한 2음 상승 팝
+        [660, 990].forEach((freq, i) => {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'sine';
+            osc.frequency.value = freq;
+            const t = audioCtx.currentTime + i * 0.1;
+            gain.gain.setValueAtTime(0, t);
+            gain.gain.linearRampToValueAtTime(0.4, t + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start(t);
+            osc.stop(t + 0.25);
+        });
     }
 }
 
@@ -307,7 +324,8 @@ imageUpload.addEventListener('change', (e) => {
             sourceImage = img;
             startBtn.classList.remove('disabled');
             startBtn.disabled = false;
-            showPhotoPreview(event.target.result); // 미리보기 표시
+            playSound('photo-select');         // 효과음
+            showPhotoPreview(event.target.result);
             uploadStatus.textContent = '😤 준비됐다! 이제 박살내러 가자!';
             uploadStatus.style.color = '#00f2fe';
         };
