@@ -32,7 +32,7 @@ const BRICK_COLS = 10;
 const BRICK_PADDING = 2;
 const BRICK_OFFSET_TOP = 70;
 const BRICK_OFFSET_LEFT = 10;
-const BOMB_COUNT = 11;
+const BOMB_COUNT = 7;          // 폭탄 블럭 개수 (난이도 조절)
 
 // ─── 스테이지 시스템 ──────────────────────────────────────────────
 const MAX_STAGE = 5;
@@ -168,71 +168,75 @@ function playSound(type) {
         });
 
     } else if (type === 'bomb-explosion') {
-        // 💥 화려한 폭발음: 4레이어
+        // 💥 초거대 폭발음: 5레이어 시네마틱 사운드
         const t0 = audioCtx.currentTime;
 
-        // 1레이어: 서브베이스 붐(BOOM) — 깊고 더러운 충격
-        const boomLen = Math.floor(audioCtx.sampleRate * 0.9);
+        // 1레이어: 초저음 서브 붐 (쿵!)
+        const boomLen = Math.floor(audioCtx.sampleRate * 1.2);
         const boomBuf = audioCtx.createBuffer(1, boomLen, audioCtx.sampleRate);
         const boomData = boomBuf.getChannelData(0);
         for (let i = 0; i < boomLen; i++)
-            boomData[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / boomLen, 0.7);
+            boomData[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / boomLen, 0.5);
         const boomSrc = audioCtx.createBufferSource();
         boomSrc.buffer = boomBuf;
         const boomLpf = audioCtx.createBiquadFilter();
-        boomLpf.type = 'lowpass'; boomLpf.frequency.value = 200;
+        boomLpf.type = 'lowpass'; boomLpf.frequency.value = 150;
         const boomGain = audioCtx.createGain();
-        boomGain.gain.setValueAtTime(6.0, t0);
-        boomGain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.9);
+        boomGain.gain.setValueAtTime(8.0, t0);
+        boomGain.gain.exponentialRampToValueAtTime(0.001, t0 + 1.1);
         boomSrc.connect(boomLpf); boomLpf.connect(boomGain); boomGain.connect(audioCtx.destination);
         boomSrc.start(t0);
 
-        // 2레이어: 충격파 크랙 — 빠른 어택, 날카롭게
-        const crackLen = Math.floor(audioCtx.sampleRate * 0.12);
-        const crackBuf = audioCtx.createBuffer(1, crackLen, audioCtx.sampleRate);
-        const crackData = crackBuf.getChannelData(0);
-        for (let i = 0; i < crackLen; i++)
-            crackData[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / crackLen, 4);
-        const crackSrc = audioCtx.createBufferSource();
-        crackSrc.buffer = crackBuf;
-        const crackBpf = audioCtx.createBiquadFilter();
-        crackBpf.type = 'bandpass'; crackBpf.frequency.value = 2200; crackBpf.Q.value = 0.4;
-        const crackGain = audioCtx.createGain();
-        crackGain.gain.setValueAtTime(4.0, t0);
-        crackGain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.12);
-        crackSrc.connect(crackBpf); crackBpf.connect(crackGain); crackGain.connect(audioCtx.destination);
-        crackSrc.start(t0);
+        // 2레이어: 금속성 파편음 (치익!)
+        const debrisLen = Math.floor(audioCtx.sampleRate * 0.4);
+        const debrisBuf = audioCtx.createBuffer(1, debrisLen, audioCtx.sampleRate);
+        const debrisData = debrisBuf.getChannelData(0);
+        for (let i = 0; i < debrisLen; i++)
+            debrisData[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / debrisLen, 3);
+        const debrisSrc = audioCtx.createBufferSource();
+        debrisSrc.buffer = debrisBuf;
+        const debrisHpf = audioCtx.createBiquadFilter();
+        debrisHpf.type = 'highpass'; debrisHpf.frequency.value = 3000;
+        const debrisGain = audioCtx.createGain();
+        debrisGain.gain.setValueAtTime(2.0, t0);
+        debrisGain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.35);
+        debrisSrc.connect(debrisHpf); debrisHpf.connect(debrisGain); debrisGain.connect(audioCtx.destination);
+        debrisSrc.start(t0);
 
-        // 3레이어: 피치 하강 진동음 — 둥~BOOM↓
-        [200, 140, 90, 55].forEach((freq, i) => {
+        // 3레이어: 묵직한 피치 하강 (슈우웅↓)
+        [150, 100, 60].forEach((freq, i) => {
             const o = audioCtx.createOscillator();
             const g = audioCtx.createGain();
             o.type = 'sawtooth';
-            o.frequency.setValueAtTime(freq * 2.5, t0 + i * 0.045);
-            o.frequency.exponentialRampToValueAtTime(freq * 0.4, t0 + i * 0.045 + 0.42);
-            g.gain.setValueAtTime(1.5, t0 + i * 0.045);
-            g.gain.exponentialRampToValueAtTime(0.001, t0 + i * 0.045 + 0.48);
+            o.frequency.setValueAtTime(freq * 3, t0 + i * 0.03);
+            o.frequency.exponentialRampToValueAtTime(30, t0 + i * 0.03 + 0.6);
+            g.gain.setValueAtTime(1.8, t0 + i * 0.03);
+            g.gain.exponentialRampToValueAtTime(0.001, t0 + i * 0.03 + 0.7);
             o.connect(g); g.connect(audioCtx.destination);
-            o.start(t0 + i * 0.045);
-            o.stop(t0 + i * 0.045 + 0.5);
+            o.start(t0 + i * 0.03); o.stop(t0 + i * 0.03 + 0.8);
         });
 
-        // 4레이어: 에코 잔향 — 점점 작아지는 여운
-        [0.15, 0.32, 0.52].forEach((delay, i) => {
-            const eLen = Math.floor(audioCtx.sampleRate * 0.25);
-            const eBuf2 = audioCtx.createBuffer(1, eLen, audioCtx.sampleRate);
-            const eData2 = eBuf2.getChannelData(0);
-            for (let j = 0; j < eLen; j++)
-                eData2[j] = (Math.random() * 2 - 1) * Math.pow(1 - j / eLen, 1.8) * (0.6 - i * 0.18);
-            const eSrc2 = audioCtx.createBufferSource();
-            eSrc2.buffer = eBuf2;
-            const eLpf2 = audioCtx.createBiquadFilter();
-            eLpf2.type = 'lowpass'; eLpf2.frequency.value = 350 - i * 80;
-            const eGain2 = audioCtx.createGain();
-            eGain2.gain.setValueAtTime(2.0 - i * 0.6, t0 + delay);
-            eGain2.gain.exponentialRampToValueAtTime(0.001, t0 + delay + 0.28);
-            eSrc2.connect(eLpf2); eLpf2.connect(eGain2); eGain2.connect(audioCtx.destination);
-            eSrc2.start(t0 + delay);
+        // 4레이어: 가청 한계 이명 현상 (삐-) - 타격감 강화
+        const ringOsc = audioCtx.createOscillator();
+        const ringGain = audioCtx.createGain();
+        ringOsc.type = 'sine';
+        ringOsc.frequency.setValueAtTime(6000, t0);
+        ringGain.gain.setValueAtTime(0.15, t0);
+        ringGain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.8);
+        ringOsc.connect(ringGain); ringGain.connect(audioCtx.destination);
+        ringOsc.start(t0); ringOsc.stop(t0 + 0.9);
+
+        // 5레이어: 공간감 반사 (에코)
+        [0.2, 0.4, 0.6].forEach((delay, i) => {
+            const echoGain = audioCtx.createGain();
+            echoGain.gain.setValueAtTime(1.0 - i * 0.3, t0 + delay);
+            echoGain.gain.exponentialRampToValueAtTime(0.001, t0 + delay + 0.4);
+            const echoSrc = audioCtx.createBufferSource();
+            echoSrc.buffer = boomBuf; // 메인 붐을 재사용
+            const echoLpf = audioCtx.createBiquadFilter();
+            echoLpf.type = 'lowpass'; echoLpf.frequency.value = 100;
+            echoSrc.connect(echoLpf); echoLpf.connect(echoGain); echoGain.connect(audioCtx.destination);
+            echoSrc.start(t0 + delay);
         });
     }
 }
@@ -551,29 +555,38 @@ function drawBricks() {
                     ctx.fillRect(brickX, brickY, brickWidth, brickHeight);
                 }
 
-                // 폭탄 그래픽: 검정 반투명 배경 + 붉은 글로우 + 크게
+                // 폭탄 그래픽: 강렬한 가시성 개선
                 if (b.bomb) {
-                    // 1) 검정 반투명 배경 (이모지 가시성 확보)
-                    ctx.globalAlpha = 0.75;
+                    const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 150);
+
+                    // 1) 강인한 검정 프레임 & 배경
+                    ctx.globalAlpha = 0.85;
                     ctx.fillStyle = '#000';
-                    ctx.fillRect(brickX + 1, brickY + 1, brickWidth - 2, brickHeight - 2);
+                    ctx.fillRect(brickX, brickY, brickWidth, brickHeight);
 
-                    // 2) 펄싱 테두리
-                    const pulse = 0.6 + 0.4 * Math.sin(Date.now() / 160);
+                    // 2) 타오르는 화염 글로우 테두리
                     ctx.globalAlpha = 1;
-                    ctx.strokeStyle = `rgba(255,${Math.floor(60 + pulse * 80)},0,${0.75 + pulse * 0.25})`;
-                    ctx.lineWidth = 2;
-                    ctx.strokeRect(brickX + 0.5, brickY + 0.5, brickWidth - 1, brickHeight - 1);
+                    ctx.shadowBlur = 10 + pulse * 10;
+                    ctx.shadowColor = `rgba(255, 60, 0, ${0.5 + pulse * 0.5})`;
+                    ctx.strokeStyle = `rgba(255, ${Math.floor(50 + pulse * 150)}, 0, 1)`;
+                    ctx.lineWidth = 2.5;
+                    ctx.strokeRect(brickX + 1, brickY + 1, brickWidth - 2, brickHeight - 2);
 
-                    // 3) 이모지 + 붉은 섀도우 글로우
-                    const fs = Math.min(brickWidth - 2, brickHeight - 1) * 0.88;
-                    ctx.font = `${fs}px serif`;
+                    // 3) 중앙 폭탄 이모지 & 광원 효과
+                    const fs = Math.min(brickWidth, brickHeight) * 0.95;
+                    ctx.font = `bold ${fs}px serif`;
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
-                    ctx.shadowColor = `rgba(255,100,0,${0.8 + pulse * 0.2})`;
-                    ctx.shadowBlur = 8 + pulse * 6;
-                    ctx.globalAlpha = 1;
-                    ctx.fillText('💣', brickX + brickWidth / 2, brickY + brickHeight / 2 + 0.5);
+
+                    // 배경에 살짝 붉은 빛
+                    ctx.fillStyle = `rgba(255, 0, 0, ${0.1 + pulse * 0.2})`;
+                    ctx.fillRect(brickX + 2, brickY + 2, brickWidth - 4, brickHeight - 4);
+
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = '#ff3e10';
+                    ctx.fillStyle = '#fff'; // 흰색 느낌의 강한 광원
+                    ctx.fillText('💣', brickX + brickWidth / 2, brickY + brickHeight / 2 + 1);
+
                     ctx.shadowBlur = 0;
                 } else {
                     ctx.strokeStyle = 'rgba(255,255,255,0.3)';
